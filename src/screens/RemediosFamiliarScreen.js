@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView, Modal, TextInput,
@@ -6,6 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNavFamiliar from '../components/BottomNavFamiliar';
+import { createMedication, deleteMedication, getMedications } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 const remediosIniciais = [
   { id: 1, nome: 'Losartana 50mg', dose: '1 comprimido', cor: '#e6f0ff', corBox: 'Caixa branca', horarios: ['08:00', '20:00'], tomado: true },
@@ -15,30 +17,51 @@ const remediosIniciais = [
 ];
 
 export default function RemediosFamiliarScreen({ navigation }) {
+  const { token, patient } = useAuth();
   const [remedios, setRemedios] = useState(remediosIniciais);
   const [modal, setModal] = useState(false);
   const [novoNome, setNovoNome] = useState('');
   const [novaDose, setNovaDose] = useState('');
   const [novoHorario, setNovoHorario] = useState('');
 
-  function adicionarRemedio() {
+  useEffect(() => {
+    if (!token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      return;
+    }
+
+    carregarRemedios();
+  }, [navigation, token]);
+
+  async function carregarRemedios() {
+    const data = await getMedications(token).catch(() => null);
+    if (data?.medications) setRemedios(data.medications);
+  }
+
+  async function adicionarRemedio() {
     if (!novoNome.trim()) return;
-    const novo = {
-      id: Date.now(),
-      nome: novoNome,
+
+    const response = await createMedication(token, 'me', {
+      name: novoNome,
       dose: novaDose || '1 comprimido',
-      cor: '#e6f0ff',
-      corBox: 'Caixa azul',
-      horarios: novoHorario ? [novoHorario] : ['08:00'],
-      tomado: false,
-    };
-    setRemedios([...remedios, novo]);
+      boxColor: 'Caixa azul',
+      uiColor: '#e6f0ff',
+      scheduleTimes: novoHorario ? [novoHorario] : ['08:00'],
+    }).catch(() => null);
+
+    if (response?.medication) {
+      setRemedios([...remedios, response.medication]);
+    }
+
     setNovoNome(''); setNovaDose(''); setNovoHorario('');
     setModal(false);
   }
 
-  function removerRemedio(id) {
+  async function removerRemedio(id) {
+    const original = remedios;
     setRemedios(remedios.filter(r => r.id !== id));
+    const response = await deleteMedication(token, id).catch(() => null);
+    if (!response?.deleted) setRemedios(original);
   }
 
   return (
@@ -49,14 +72,14 @@ export default function RemediosFamiliarScreen({ navigation }) {
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.headerTitle}>Remédios</Text>
-          <Text style={styles.headerSub}>Maria Aparecida</Text>
+          <Text style={styles.headerSub}>{patient?.fullName || 'Paciente vinculado'}</Text>
         </View>
       </View>
 
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle" size={18} color={COLORS.purple} />
-          <Text style={styles.infoText}>Você está gerenciando os remédios de Maria Aparecida.</Text>
+          <Text style={styles.infoText}>Você está gerenciando os remédios de {patient?.fullName || 'paciente vinculado'}.</Text>
         </View>
 
         {remedios.map((rem) => (

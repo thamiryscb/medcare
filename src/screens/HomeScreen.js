@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity,
   StyleSheet, SafeAreaView, ScrollView,
@@ -6,23 +6,72 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNav from '../components/BottomNav';
-
-const menuItems = [
-  { screen: 'Remedios', icon: 'medkit', color: COLORS.primaryLight, iconColor: COLORS.primary, name: 'Meus Remédios', desc: 'Ver e cadastrar remédios' },
-  { screen: 'Checklist', icon: 'checkbox', color: COLORS.successLight, iconColor: COLORS.success, name: 'Check-list Hoje', desc: '3 de 5 tomados' },
-  { screen: 'Familia', icon: 'people', color: COLORS.purpleLight, iconColor: COLORS.purple, name: 'Família', desc: 'Alertas e cuidadores' },
-];
+import { getPatientDashboard } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 export default function HomeScreen({ navigation }) {
+  const { token, user } = useAuth();
+  const [dashboard, setDashboard] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      return () => {
+        active = false;
+      };
+    }
+
+    getPatientDashboard(token)
+      .then((data) => {
+        if (active) setDashboard(data);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [navigation, token]);
+
+  const currentUser = dashboard?.user || user || {};
+  const nextReminder = dashboard?.nextReminder;
+  const currentMenuItems = [
+    {
+      screen: 'Remedios',
+      icon: 'medkit',
+      color: COLORS.primaryLight,
+      iconColor: COLORS.primary,
+      name: 'Meus Remédios',
+      desc: dashboard?.menuSummary?.medicationsLabel || 'Ver e cadastrar remédios',
+    },
+    {
+      screen: 'Checklist',
+      icon: 'checkbox',
+      color: COLORS.successLight,
+      iconColor: COLORS.success,
+      name: 'Check-list Hoje',
+      desc: dashboard?.menuSummary?.checklistLabel || 'Carregando...',
+    },
+    {
+      screen: 'Familia',
+      icon: 'people',
+      color: COLORS.purpleLight,
+      iconColor: COLORS.purple,
+      name: 'Família',
+      desc: dashboard?.menuSummary?.caregiversLabel || 'Cuidadores',
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Olá,</Text>
-          <Text style={styles.name}>Maria Aparecida</Text>
+          <Text style={styles.name}>{currentUser.name || 'Paciente'}</Text>
         </View>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>MA</Text>
+          <Text style={styles.avatarText}>{currentUser.initials || 'P'}</Text>
         </View>
       </View>
 
@@ -33,14 +82,14 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View>
             <Text style={styles.nextLabel}>Próximo lembrete</Text>
-            <Text style={styles.nextMed}>Losartana 50mg</Text>
-            <Text style={styles.nextTime}>Hoje às 12:00</Text>
+            <Text style={styles.nextMed}>{nextReminder?.name || 'Nenhum pendente'}</Text>
+            <Text style={styles.nextTime}>{nextReminder?.label || 'Tudo certo por agora'}</Text>
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>O que você precisa?</Text>
         <View style={styles.grid}>
-          {menuItems.map((item) => (
+          {currentMenuItems.map((item) => (
             <TouchableOpacity
               key={item.screen}
               style={styles.menuCard}

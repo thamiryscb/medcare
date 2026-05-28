@@ -2,15 +2,35 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, KeyboardAvoidingView,
-  Platform, ScrollView,
+  Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
+import { loginPatient } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('maria@email.com');
+  const [senha, setSenha] = useState('123456');
   const [verSenha, setVerSenha] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function entrarPaciente() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const session = await loginPatient(email.trim(), senha);
+      signIn(session);
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+    } catch (err) {
+      setError(err.message || 'Nao foi possivel entrar');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -65,12 +85,21 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             <TouchableOpacity
-              style={styles.btnPrimary}
-              onPress={() => navigation.navigate('Home')}
+              style={[styles.btnPrimary, loading && styles.btnDisabled]}
+              onPress={entrarPaciente}
+              disabled={loading}
             >
-              <Ionicons name="person" size={18} color={COLORS.white} />
-              <Text style={styles.btnText}>Entrar como paciente</Text>
+              {loading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <>
+                  <Ionicons name="person" size={18} color={COLORS.white} />
+                  <Text style={styles.btnText}>Entrar como paciente</Text>
+                </>
+              )}
             </TouchableOpacity>
+
+            {!!error && <Text style={styles.errorText}>{error}</Text>}
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -135,6 +164,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
   btnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  btnDisabled: { opacity: 0.75 },
+  errorText: {
+    color: '#b42318',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 14 },
   dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
   dividerText: { fontSize: 13, color: COLORS.textLight },

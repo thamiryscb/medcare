@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView,
@@ -6,16 +6,56 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNavFamiliar from '../components/BottomNavFamiliar';
+import { getCaregiverDashboard, logout as apiLogout } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 export default function HomeFamiliarScreen({ navigation }) {
+  const { token, user, patient, signOut } = useAuth();
+  const [dashboard, setDashboard] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      return () => {
+        active = false;
+      };
+    }
+
+    getCaregiverDashboard(token)
+      .then((data) => {
+        if (active) setDashboard(data);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [navigation, token]);
+
+  async function sair() {
+    if (token) {
+      await apiLogout(token).catch(() => {});
+    }
+
+    signOut();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  }
+
+  const currentUser = dashboard?.user || user || {};
+  const currentPatient = dashboard?.patient || patient || {};
+  const summary = dashboard?.todaySummary || {};
+  const firstAlert = dashboard?.alerts?.find((alert) => alert.status === 'open');
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerLabel}>Você está acompanhando</Text>
-          <Text style={styles.headerName}>Carlos (Familiar)</Text>
+          <Text style={styles.headerName}>{currentUser.name || 'Familiar'} (Familiar)</Text>
         </View>
-        <TouchableOpacity style={styles.sairBtn} onPress={() => navigation.navigate('Login')}>
+        <TouchableOpacity style={styles.sairBtn} onPress={sair}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.white} />
         </TouchableOpacity>
       </View>
@@ -23,12 +63,12 @@ export default function HomeFamiliarScreen({ navigation }) {
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <View style={styles.pacienteCard}>
           <View style={styles.pacienteAvatar}>
-            <Text style={styles.pacienteAvatarText}>MA</Text>
+            <Text style={styles.pacienteAvatarText}>{currentPatient.fullName ? currentPatient.fullName.slice(0, 2).toUpperCase() : 'P'}</Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.pacienteLabel}>Paciente vinculado</Text>
-            <Text style={styles.pacienteNome}>Maria Aparecida</Text>
-            <Text style={styles.pacienteCodigo}>Código: MARIA-2024</Text>
+            <Text style={styles.pacienteNome}>{currentPatient.fullName || 'Paciente vinculado'}</Text>
+            <Text style={styles.pacienteCodigo}>Código: {currentPatient.accessCode || '---'}</Text>
           </View>
           <View style={styles.statusOnline}>
             <Text style={styles.statusOnlineText}>● Ativo</Text>
@@ -38,15 +78,15 @@ export default function HomeFamiliarScreen({ navigation }) {
         <Text style={styles.sectionTitle}>Resumo de hoje</Text>
         <View style={styles.resumoGrid}>
           <View style={[styles.resumoCard, { borderLeftColor: COLORS.success }]}>
-            <Text style={styles.resumoNum}>3</Text>
+            <Text style={styles.resumoNum}>{summary.taken ?? '-'}</Text>
             <Text style={styles.resumoLabel}>Tomados</Text>
           </View>
           <View style={[styles.resumoCard, { borderLeftColor: COLORS.orange }]}>
-            <Text style={styles.resumoNum}>2</Text>
+            <Text style={styles.resumoNum}>{summary.pending ?? '-'}</Text>
             <Text style={styles.resumoLabel}>Pendentes</Text>
           </View>
           <View style={[styles.resumoCard, { borderLeftColor: COLORS.primary }]}>
-            <Text style={styles.resumoNum}>5</Text>
+            <Text style={styles.resumoNum}>{summary.total ?? '-'}</Text>
             <Text style={styles.resumoLabel}>Total</Text>
           </View>
         </View>
@@ -54,8 +94,8 @@ export default function HomeFamiliarScreen({ navigation }) {
         <View style={styles.alertaCard}>
           <Ionicons name="warning" size={22} color={COLORS.warning} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.alertaTitulo}>Lembrete não confirmado</Text>
-            <Text style={styles.alertaDesc}>Sinvastatina · previsto para 22:00 de ontem</Text>
+            <Text style={styles.alertaTitulo}>{firstAlert?.title || 'Sem alertas ativos'}</Text>
+            <Text style={styles.alertaDesc}>{firstAlert?.description || 'Tudo certo com o paciente hoje'}</Text>
           </View>
         </View>
 
@@ -74,7 +114,7 @@ export default function HomeFamiliarScreen({ navigation }) {
               <Ionicons name="checkbox" size={26} color={COLORS.success} />
             </View>
             <Text style={styles.menuName}>Check-list Hoje</Text>
-            <Text style={styles.menuDesc}>3 de 5 tomados</Text>
+            <Text style={styles.menuDesc}>{dashboard?.menuSummary?.checklistLabel || 'Carregando...'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuCard}>
@@ -82,7 +122,7 @@ export default function HomeFamiliarScreen({ navigation }) {
               <Ionicons name="notifications" size={26} color={COLORS.orange} />
             </View>
             <Text style={styles.menuName}>Alertas</Text>
-            <Text style={styles.menuDesc}>1 alerta ativo</Text>
+            <Text style={styles.menuDesc}>{dashboard?.menuSummary?.alertsLabel || 'Alertas'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuCard}>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView,
@@ -6,6 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNav from '../components/BottomNav';
+import { getPatientDashboard } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 const cuidadores = [
   { id: 1, nome: 'Carlos (Filho)', telefone: '(84) 9 9999-1234', iniciais: 'CA', cor: COLORS.primaryLight, corTexto: COLORS.primary },
@@ -18,6 +20,25 @@ const alertas = [
 ];
 
 export default function FamiliaScreen({ navigation }) {
+  const { token } = useAuth();
+  const [dados, setDados] = useState({ cuidadores, alertas });
+
+  useEffect(() => {
+    if (!token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      return;
+    }
+
+    getPatientDashboard(token)
+      .then((dashboard) => {
+        setDados({
+          cuidadores: dashboard.caregivers || cuidadores,
+          alertas: dashboard.alerts || alertas,
+        });
+      })
+      .catch(() => {});
+  }, [navigation, token]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -32,10 +53,10 @@ export default function FamiliaScreen({ navigation }) {
 
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Cuidadores cadastrados</Text>
-        {cuidadores.map((c) => (
+        {dados.cuidadores.map((c) => (
           <View key={c.id} style={styles.card}>
-            <View style={[styles.avatar, { backgroundColor: c.cor }]}>
-              <Text style={[styles.avatarText, { color: c.corTexto }]}>{c.iniciais}</Text>
+            <View style={[styles.avatar, { backgroundColor: c.cor || COLORS.primaryLight }]}>
+              <Text style={[styles.avatarText, { color: c.corTexto || COLORS.primary }]}>{c.iniciais}</Text>
             </View>
             <View style={styles.famInfo}>
               <Text style={styles.famNome}>{c.nome}</Text>
@@ -48,7 +69,7 @@ export default function FamiliaScreen({ navigation }) {
         ))}
 
         <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Alertas recentes</Text>
-        {alertas.map((a) => (
+        {dados.alertas.map((a) => (
           <View key={a.id} style={[styles.alertCard, a.tipo === 'ok' ? styles.alertOk : styles.alertWarn]}>
             <Text style={[styles.alertTitulo, a.tipo === 'ok' ? styles.alertTituloOk : styles.alertTituloWarn]}>
               {a.tipo === 'ok' ? '✅ ' : '⚠️ '}{a.titulo}

@@ -1,7 +1,8 @@
 const { createApp } = require('../src/app');
+const { createSqliteStore } = require('../src/data/sqliteStore');
 
 async function main() {
-  const server = createApp();
+  const server = createApp({ store: createSqliteStore(':memory:') });
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();

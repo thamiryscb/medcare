@@ -2,16 +2,36 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, KeyboardAvoidingView,
-  Platform, ScrollView,
+  Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
+import { loginCaregiver } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 export default function LoginFamiliarScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [codigo, setCodigo] = useState('');
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('carlos@email.com');
+  const [senha, setSenha] = useState('123456');
+  const [codigo, setCodigo] = useState('MARIA-2024');
   const [verSenha, setVerSenha] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function entrarFamiliar() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const session = await loginCaregiver(email.trim(), senha, codigo.trim().toUpperCase());
+      signIn(session);
+      navigation.reset({ index: 0, routes: [{ name: 'HomeFamiliar' }] });
+    } catch (err) {
+      setError(err.message || 'Nao foi possivel entrar');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -86,12 +106,21 @@ export default function LoginFamiliarScreen({ navigation }) {
             </Text>
 
             <TouchableOpacity
-              style={styles.btnPrimary}
-              onPress={() => navigation.navigate('HomeFamiliar')}
+              style={[styles.btnPrimary, loading && styles.btnDisabled]}
+              onPress={entrarFamiliar}
+              disabled={loading}
             >
-              <Ionicons name="people" size={18} color={COLORS.white} />
-              <Text style={styles.btnText}>Entrar como familiar</Text>
+              {loading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <>
+                  <Ionicons name="people" size={18} color={COLORS.white} />
+                  <Text style={styles.btnText}>Entrar como familiar</Text>
+                </>
+              )}
             </TouchableOpacity>
+
+            {!!error && <Text style={styles.errorText}>{error}</Text>}
 
             <TouchableOpacity style={styles.btnCriar}>
               <Text style={styles.btnCriarText}>Criar conta de familiar</Text>
@@ -154,6 +183,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
   btnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  btnDisabled: { opacity: 0.75 },
+  errorText: {
+    color: '#b42318',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   btnCriar: { paddingVertical: 10, alignItems: 'center', marginBottom: 8 },
   btnCriarText: { color: COLORS.purple, fontSize: 14, fontWeight: '600' },
   btnVoltar: { paddingVertical: 10, alignItems: 'center' },

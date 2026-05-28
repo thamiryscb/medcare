@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   role TEXT NOT NULL CHECK (role IN ('patient', 'caregiver')),
   name TEXT NOT NULL,
@@ -10,7 +10,7 @@ CREATE TABLE users (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE patients (
+CREATE TABLE IF NOT EXISTS patients (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
   full_name TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE patients (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE caregiver_links (
+CREATE TABLE IF NOT EXISTS caregiver_links (
   id TEXT PRIMARY KEY,
   patient_id TEXT NOT NULL REFERENCES patients(id),
   caregiver_user_id TEXT NOT NULL REFERENCES users(id),
@@ -31,7 +31,7 @@ CREATE TABLE caregiver_links (
   UNIQUE (patient_id, caregiver_user_id)
 );
 
-CREATE TABLE caregiver_invites (
+CREATE TABLE IF NOT EXISTS caregiver_invites (
   id TEXT PRIMARY KEY,
   patient_id TEXT NOT NULL REFERENCES patients(id),
   name TEXT NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE caregiver_invites (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE medications (
+CREATE TABLE IF NOT EXISTS medications (
   id TEXT PRIMARY KEY,
   patient_id TEXT NOT NULL REFERENCES patients(id),
   name TEXT NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE medications (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE medication_schedules (
+CREATE TABLE IF NOT EXISTS medication_schedules (
   id TEXT PRIMARY KEY,
   medication_id TEXT NOT NULL REFERENCES medications(id),
   time TEXT NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE medication_schedules (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE medication_checkins (
+CREATE TABLE IF NOT EXISTS medication_checkins (
   id TEXT PRIMARY KEY,
   patient_id TEXT NOT NULL REFERENCES patients(id),
   medication_id TEXT NOT NULL REFERENCES medications(id),
@@ -78,7 +78,7 @@ CREATE TABLE medication_checkins (
   UNIQUE (patient_id, medication_id, schedule_id, date)
 );
 
-CREATE TABLE alerts (
+CREATE TABLE IF NOT EXISTS alerts (
   id TEXT PRIMARY KEY,
   patient_id TEXT NOT NULL REFERENCES patients(id),
   type TEXT NOT NULL,
@@ -91,8 +91,17 @@ CREATE TABLE alerts (
   updated_at TEXT NOT NULL
 );
 
-CREATE INDEX idx_medications_patient_id ON medications(patient_id);
-CREATE INDEX idx_schedules_medication_id ON medication_schedules(medication_id);
-CREATE INDEX idx_checkins_patient_date ON medication_checkins(patient_id, date);
-CREATE INDEX idx_alerts_patient_status ON alerts(patient_id, status);
-CREATE INDEX idx_links_caregiver_user_id ON caregiver_links(caregiver_user_id);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_medications_patient_id ON medications(patient_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_medication_id ON medication_schedules(medication_id);
+CREATE INDEX IF NOT EXISTS idx_checkins_patient_date ON medication_checkins(patient_id, date);
+CREATE INDEX IF NOT EXISTS idx_alerts_patient_status ON alerts(patient_id, status);
+CREATE INDEX IF NOT EXISTS idx_links_caregiver_user_id ON caregiver_links(caregiver_user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);

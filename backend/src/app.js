@@ -2,18 +2,19 @@ const http = require('http');
 const { URL } = require('url');
 const { readEnv } = require('./config/env');
 const { createMemoryStore } = require('./data/memoryStore');
+const { createSqliteStore } = require('./data/sqliteStore');
 const { createRouter } = require('./http/router');
 const { readJson, sendEmpty, sendError, sendJson } = require('./http/response');
 const { registerRoutes } = require('./routes');
 
 function createApp(options = {}) {
   const env = options.env || readEnv();
-  const store = options.store || createMemoryStore();
+  const store = options.store || createDefaultStore(env);
   const router = createRouter();
 
   registerRoutes(router);
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     try {
       if (req.method === 'OPTIONS') {
         sendEmpty(res, 204, env.corsOrigin);
@@ -42,10 +43,27 @@ function createApp(options = {}) {
       sendError(res, error, env.corsOrigin);
     }
   });
+
+  server.store = store;
+  server.on('close', () => {
+    if (typeof store.close === 'function') {
+      store.close();
+    }
+  });
+
+  return server;
+}
+
+function createDefaultStore(env) {
+  if (env.store === 'memory') {
+    return createMemoryStore();
+  }
+
+  return createSqliteStore(env.databaseUrl);
 }
 
 function shouldReadBody(method) {
   return ['POST', 'PATCH', 'PUT'].includes(method);
 }
 
-module.exports = { createApp };
+module.exports = { createApp, createDefaultStore };

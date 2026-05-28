@@ -2,7 +2,7 @@
 
 Backend Node.js for the existing MedCare screens.
 
-It currently runs with an in-memory store so the app can be tested without a database. The data layer is isolated, and `database/schema.sql` is ready for the first real database migration.
+It runs with a local SQLite database using Node's built-in `node:sqlite` module. No backend dependency install is required.
 
 ## Run
 
@@ -13,7 +13,13 @@ npm start
 
 The API starts at `http://localhost:3333`.
 
-No dependency install is required right now because this backend uses only built-in Node.js modules.
+The default database file is created automatically at:
+
+```txt
+backend/database/medcare.sqlite
+```
+
+Use `DATABASE_URL=:memory:` for an in-memory database, or `MEDCARE_STORE=memory` to run the older mock store.
 
 ## Demo accounts
 
@@ -45,8 +51,16 @@ The seeded patient code matches the current mobile mock screens.
 - Caregiver/family list and invite-ready endpoint.
 - Alerts list and read confirmation.
 
-## Database next step
+## Database
 
-Use `database/schema.sql` as the base migration. Then replace `src/data/memoryStore.js` with a store that implements the same methods against PostgreSQL, SQLite, Supabase, Firebase, or another database.
+`database/schema.sql` is applied on startup with `CREATE TABLE IF NOT EXISTS`, then the demo data is inserted only when the database has no users yet.
 
-The service and route layers should not need major changes when the store is swapped.
+The app currently stores:
+
+- users with `patient` and `caregiver` roles
+- patient profiles and access codes
+- caregiver links
+- medications and medication schedules
+- daily medication confirmations
+- alerts
+- login sessions

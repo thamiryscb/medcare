@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView,
@@ -6,6 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNav from '../components/BottomNav';
+import { getChecklist, markChecklistItemTaken } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 const itensIniciais = [
   { id: 1, nome: 'Losartana 50mg', horario: '08:00', dose: '1 comprimido', cor: '#e6f0ff', tomado: true },
@@ -16,15 +18,33 @@ const itensIniciais = [
 ];
 
 export default function ChecklistScreen({ navigation }) {
+  const { token } = useAuth();
   const [itens, setItens] = useState(itensIniciais);
 
-  function marcarTomado(id) {
+  useEffect(() => {
+    if (!token) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      return;
+    }
+
+    carregarChecklist();
+  }, [navigation, token]);
+
+  async function carregarChecklist() {
+    const data = await getChecklist(token).catch(() => null);
+    if (data?.items) setItens(data.items);
+  }
+
+  async function marcarTomado(id) {
+    const original = itens;
     setItens(itens.map(i => i.id === id ? { ...i, tomado: true } : i));
+    const response = await markChecklistItemTaken(token, id, true).catch(() => null);
+    if (!response?.taken) setItens(original);
   }
 
   const tomados = itens.filter(i => i.tomado).length;
   const total = itens.length;
-  const progresso = Math.round((tomados / total) * 100);
+  const progresso = total === 0 ? 0 : Math.round((tomados / total) * 100);
 
   return (
     <SafeAreaView style={styles.safe}>
