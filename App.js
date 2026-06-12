@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import LoginScreen from './src/screens/LoginScreen';
 import LoginFamiliarScreen from './src/screens/LoginFamiliarScreen';
+import CadastroScreen from './src/screens/CadastroScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import RemediosScreen from './src/screens/RemediosScreen';
 import ChecklistScreen from './src/screens/ChecklistScreen';
@@ -22,6 +23,7 @@ export default function App() {
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Cadastro" component={CadastroScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Remedios" component={RemediosScreen} />
         <Stack.Screen name="Checklist" component={ChecklistScreen} />

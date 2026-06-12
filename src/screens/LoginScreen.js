@@ -1,37 +1,62 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, SafeAreaView, KeyboardAvoidingView,
-  Platform, ScrollView,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
+import { login } from '../services/authservice';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [verSenha, setVerSenha] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+
+  async function handleLogin() {
+    if (!email.trim() || !senha.trim()) {
+      Alert.alert('Atencao', 'Digite e-mail e senha.');
+      return;
+    }
+
+    setCarregando(true);
+    try {
+      const data = await login(email.trim(), senha);
+      const destino = data.usuario?.tipo === 'familiar' ? 'HomeFamiliar' : 'Home';
+      navigation.reset({ index: 0, routes: [{ name: destino }] });
+    } catch (error) {
+      Alert.alert('Erro ao entrar', error.message);
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <View style={styles.logoBox}>
-              <Ionicons name="medkit" size={28} color={COLORS.white} />
+              <Ionicons name="medkit" size={34} color={COLORS.white} />
             </View>
             <Text style={styles.appName}>MedCare</Text>
-            <Text style={styles.appSub}>Seu assistente de saúde</Text>
+            <Text style={styles.appSub}>Remedios em dia, familia tranquila.</Text>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Bem-vindo(a)!</Text>
-            <Text style={styles.subtitle}>Entre para gerenciar seus remédios</Text>
+            <Text style={styles.title}>Entrar</Text>
+            <Text style={styles.subtitle}>Acesse com seu e-mail e senha.</Text>
 
-            <Text style={styles.label}>Seu nome ou e-mail</Text>
+            <Text style={styles.label}>E-mail</Text>
             <TextInput
               style={styles.input}
               placeholder="maria@email.com"
@@ -46,53 +71,36 @@ export default function LoginScreen({ navigation }) {
             <View style={styles.inputRow}>
               <TextInput
                 style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                placeholder="••••••••"
+                placeholder="Sua senha"
                 placeholderTextColor={COLORS.textLight}
                 value={senha}
                 onChangeText={setSenha}
                 secureTextEntry={!verSenha}
               />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setVerSenha(!verSenha)}
-              >
-                <Ionicons
-                  name={verSenha ? 'eye-off-outline' : 'eye-outline'}
-                  size={22}
-                  color={COLORS.textMuted}
-                />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setVerSenha(!verSenha)}>
+                <Ionicons name={verSenha ? 'eye-off-outline' : 'eye-outline'} size={24} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.btnPrimary}
-              onPress={() => navigation.navigate('Home')}
-            >
-              <Ionicons name="person" size={18} color={COLORS.white} />
-              <Text style={styles.btnText}>Entrar como paciente</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin} disabled={carregando}>
+              {carregando ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <>
+                  <Ionicons name="person" size={20} color={COLORS.white} />
+                  <Text style={styles.btnText}>Entrar</Text>
+                </>
+              )}
             </TouchableOpacity>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={styles.btnFamiliar}
-              onPress={() => navigation.navigate('LoginFamiliar')}
-            >
-              <Ionicons name="people" size={18} color={COLORS.primary} />
-              <Text style={styles.btnFamiliarText}>Entrar como familiar / cuidador</Text>
+            <TouchableOpacity style={styles.btnFamiliar} onPress={() => navigation.navigate('LoginFamiliar')}>
+              <Ionicons name="people" size={20} color={COLORS.purple} />
+              <Text style={styles.btnFamiliarText}>Sou familiar ou cuidador</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnCriar}>
-              <Text style={styles.btnCriarText}>Criar conta nova</Text>
+            <TouchableOpacity style={styles.btnCriar} onPress={() => navigation.navigate('Cadastro', { tipo: 'paciente' })}>
+              <Text style={styles.btnCriarText}>Criar conta de paciente</Text>
             </TouchableOpacity>
-
-            <Text style={styles.hint}>
-              Letras grandes • Fácil de usar • Feito para você
-            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -102,50 +110,59 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.primary },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 28,
-    paddingTop: 40,
-    paddingBottom: 32,
-  },
+  header: { backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingTop: 44, paddingBottom: 34 },
   logoBox: {
-    width: 56, height: 56, borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
-  appName: { fontSize: 28, fontWeight: '700', color: COLORS.white },
-  appSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  card: {
-    flex: 1, backgroundColor: COLORS.white,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28,
-  },
-  title: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: COLORS.textMuted, marginBottom: 24 },
-  label: { fontSize: 14, fontWeight: '600', color: COLORS.textMuted, marginBottom: 6 },
+  appName: { fontSize: 34, fontWeight: '800', color: COLORS.white },
+  appSub: { fontSize: 16, color: 'rgba(255,255,255,0.86)', marginTop: 6 },
+  card: { flex: 1, backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 },
+  title: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  subtitle: { fontSize: 16, color: COLORS.textMuted, marginBottom: 24 },
+  label: { fontSize: 16, fontWeight: '700', color: COLORS.textMuted, marginBottom: 7 },
   input: {
-    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 14, fontSize: 16,
-    color: COLORS.text, backgroundColor: '#f8f9ff', marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    fontSize: 17,
+    color: COLORS.text,
+    backgroundColor: '#f8f9ff',
+    marginBottom: 16,
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
   eyeBtn: { padding: 10 },
   btnPrimary: {
-    backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15,
-    alignItems: 'center', marginTop: 8, marginBottom: 4,
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    minHeight: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 8,
   },
-  btnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 14 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { fontSize: 13, color: COLORS.textLight },
+  btnText: { color: COLORS.white, fontSize: 18, fontWeight: '800' },
   btnFamiliar: {
-    borderWidth: 2, borderColor: COLORS.primary, borderRadius: 14,
-    paddingVertical: 15, alignItems: 'center', marginBottom: 12,
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primaryLight,
+    borderWidth: 2,
+    borderColor: COLORS.purple,
+    borderRadius: 16,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: COLORS.purpleLight,
   },
-  btnFamiliarText: { color: COLORS.primary, fontSize: 15, fontWeight: '700' },
-  btnCriar: { paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
-  btnCriarText: { color: COLORS.textMuted, fontSize: 14 },
-  hint: { textAlign: 'center', fontSize: 12, color: COLORS.textLight },
+  btnFamiliarText: { color: COLORS.purple, fontSize: 16, fontWeight: '800' },
+  btnCriar: { paddingVertical: 18, alignItems: 'center' },
+  btnCriarText: { color: COLORS.textMuted, fontSize: 16, fontWeight: '700' },
 });

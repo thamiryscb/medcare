@@ -1,40 +1,53 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config';
+import { API_URL } from './config';
 
-export async function login(email, senha) {
-  const res = await fetch(`${API_URL}/api/auth/login`, {
+let authToken = null;
+let authUsuario = null;
+
+async function requestAuth(path, body) {
+  const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, senha }),
+    body: JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.erro || 'Erro ao fazer login.');
-  await AsyncStorage.setItem('token', data.token);
-  await AsyncStorage.setItem('usuario', JSON.stringify(data.usuario));
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.erro || 'Nao foi possivel concluir agora.');
+  }
+
+  return data;
+}
+
+export async function login(email, senha) {
+  const data = await requestAuth('/api/auth/login', { email, senha });
+  authToken = data.token;
+  authUsuario = data.usuario;
   return data;
 }
 
 export async function cadastro(email, senha, nome, tipo, codigoPaciente) {
-  const res = await fetch(`${API_URL}/api/auth/cadastro`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, senha, nome, tipo, codigoPaciente }),
+  return requestAuth('/api/auth/cadastro', {
+    email,
+    senha,
+    nome,
+    tipo,
+    codigoPaciente,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.erro || 'Erro ao cadastrar.');
-  return data;
 }
 
 export async function getToken() {
-  return await AsyncStorage.getItem('token');
+  return authToken;
 }
 
 export async function getUsuario() {
-  const u = await AsyncStorage.getItem('usuario');
-  return u ? JSON.parse(u) : null;
+  return authUsuario;
+}
+
+export function setUsuario(usuario) {
+  authUsuario = usuario;
 }
 
 export async function logout() {
-  await AsyncStorage.removeItem('token');
-  await AsyncStorage.removeItem('usuario');
+  authToken = null;
+  authUsuario = null;
 }

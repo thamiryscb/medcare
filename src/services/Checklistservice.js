@@ -1,34 +1,24 @@
-import { API_URL } from '../config';
-import { getToken } from './authService';
-
-async function headers() {
-  const token = await getToken();
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-}
+import { apiFetch } from './api';
 
 export function getHoje() {
-  return new Date().toISOString().split('T')[0];
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  const dia = String(agora.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
 }
 
 export async function getChecklist(data) {
-  const res = await fetch(`${API_URL}/api/checklist/${data}`, {
-    headers: await headers(),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.erro || 'Erro ao buscar checklist.');
-  return json;
+  return apiFetch(`/api/checklist/${data}`);
 }
 
 export async function marcarTomado(data, checklistId) {
-  const res = await fetch(`${API_URL}/api/checklist/${data}/tomar`, {
+  return apiFetch(`/api/checklist/${data}/tomar`, {
     method: 'POST',
-    headers: await headers(),
     body: JSON.stringify({ checklistId }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.erro || 'Erro ao marcar remédio.');
-  return json;
+}
+
+export async function getHistorico() {
+  return apiFetch('/api/checklist/historico/resumo');
 }
