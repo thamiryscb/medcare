@@ -89,6 +89,7 @@ function createMemoryStore(initialData = seedData()) {
         userId: payload.userId,
         fullName: payload.fullName,
         accessCode: createAccessCode(payload.fullName),
+        locationSharingEnabled: false,
         active: true,
         createdAt: now,
         updatedAt: now,
@@ -133,6 +134,8 @@ function createMemoryStore(initialData = seedData()) {
         caregiverUserId: payload.caregiverUserId,
         relationship: payload.relationship || 'Familiar',
         status: 'active',
+        notifyOnMissedDose: payload.notifyOnMissedDose !== false,
+        notifyOnLocation: Boolean(payload.notifyOnLocation),
         createdAt: now,
         updatedAt: now,
       };
@@ -180,6 +183,8 @@ function createMemoryStore(initialData = seedData()) {
         dose: payload.dose || '1 comprimido',
         boxColor: payload.boxColor || 'Caixa azul',
         uiColor: payload.uiColor || '#e6f0ff',
+        instructions: payload.instructions || null,
+        imageUri: payload.imageUri || null,
         active: true,
         createdAt: now,
         updatedAt: now,
@@ -192,6 +197,7 @@ function createMemoryStore(initialData = seedData()) {
           id: createId('sched'),
           medicationId: medication.id,
           time,
+          confirmationLimitMinutes: payload.confirmationLimitMinutes || 30,
           active: true,
           createdAt: now,
           updatedAt: now,
@@ -209,6 +215,8 @@ function createMemoryStore(initialData = seedData()) {
       if (payload.dose) medication.dose = payload.dose;
       if (payload.boxColor) medication.boxColor = payload.boxColor;
       if (payload.uiColor) medication.uiColor = payload.uiColor;
+      if (payload.instructions !== undefined) medication.instructions = payload.instructions;
+      if (payload.imageUri !== undefined) medication.imageUri = payload.imageUri;
       touch(medication);
 
       if (Array.isArray(payload.scheduleTimes)) {
@@ -225,6 +233,7 @@ function createMemoryStore(initialData = seedData()) {
             id: createId('sched'),
             medicationId: medication.id,
             time,
+            confirmationLimitMinutes: payload.confirmationLimitMinutes || 30,
             active: true,
             createdAt: now,
             updatedAt: now,
@@ -300,6 +309,67 @@ function createMemoryStore(initialData = seedData()) {
       if (!alert) return null;
       alert.status = 'read';
       return touch(alert);
+    },
+
+    createAlert(payload) {
+      const now = nowIso();
+      const alert = {
+        id: createId('alert'),
+        patientId: payload.patientId,
+        type: payload.type,
+        severity: payload.severity || 'warning',
+        title: payload.title,
+        description: payload.description,
+        detail: payload.detail || null,
+        status: payload.status || 'open',
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      data.alerts.push(alert);
+      return alert;
+    },
+
+    findOpenAlertByTypeAndDetail(patientId, type, detail) {
+      return data.alerts.find((alert) => (
+        alert.patientId === patientId &&
+        alert.type === type &&
+        alert.detail === detail &&
+        alert.status === 'open'
+      )) || null;
+    },
+
+    setPatientLocationSharing(patientId, enabled) {
+      const patient = this.findPatientById(patientId);
+      if (!patient) return null;
+
+      patient.locationSharingEnabled = Boolean(enabled);
+      return touch(patient);
+    },
+
+    createLocationEvent(patientId, payload) {
+      const now = nowIso();
+      const event = {
+        id: createId('loc'),
+        patientId,
+        latitude: Number(payload.latitude),
+        longitude: Number(payload.longitude),
+        accuracyMeters: payload.accuracyMeters ?? payload.accuracy_meters ?? null,
+        capturedAt: payload.capturedAt || payload.captured_at || now,
+        sentToCaregiver: false,
+        createdAt: now,
+      };
+
+      data.locationEvents = data.locationEvents || [];
+      data.locationEvents.push(event);
+      return event;
+    },
+
+    listLocationEvents(patientId, limit = 20) {
+      return (data.locationEvents || [])
+        .filter((event) => event.patientId === patientId)
+        .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))
+        .slice(0, limit);
     },
 
     createSession(userId, ttlHours) {

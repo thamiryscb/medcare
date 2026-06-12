@@ -48,8 +48,10 @@ The seeded patient code matches the current mobile mock screens.
 - Medications list, creation, update, and deletion.
 - Daily checklist generation from medication schedules.
 - Checklist confirmation by patient or caregiver.
+- Automatic missed-dose alert registration when checklist items pass the confirmation limit.
 - Caregiver/family list and invite-ready endpoint.
 - Alerts list and read confirmation.
+- Optional patient location sharing and location history.
 
 ## Database
 
@@ -63,4 +65,5 @@ The app currently stores:
 - medications and medication schedules
 - daily medication confirmations
 - alerts
+- optional location events
 - login sessions

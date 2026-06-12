@@ -22,12 +22,47 @@ async function main() {
       throw new Error('Expected seeded medications');
     }
 
+    const createdMedication = await request(baseUrl, 'POST', '/patients/me/medications', patientToken, {
+      name: 'Vitamina D 2000UI',
+      dose: '1 capsula',
+      boxColor: 'Caixa laranja',
+      uiColor: '#fff0d6',
+      instructions: 'Tomar apos o almoco.',
+      imageUri: 'file:///vitamina-d.jpg',
+      scheduleTimes: ['13:00'],
+      confirmationLimitMinutes: 45,
+    });
+
+    if (!createdMedication.medication.imageUri || !createdMedication.medication.instructions) {
+      throw new Error('Expected medication visual fields');
+    }
+
     const checklist = await request(baseUrl, 'GET', '/patients/me/checklist', patientToken);
     const pending = checklist.items.find((item) => !item.taken);
     if (pending) {
       await request(baseUrl, 'PATCH', `/checklist/${encodeURIComponent(pending.id)}/taken`, patientToken, {
         taken: true,
       });
+    }
+
+    await request(baseUrl, 'PATCH', '/patients/me/location-sharing', patientToken, {
+      enabled: true,
+    });
+
+    await request(baseUrl, 'POST', '/patients/me/locations', patientToken, {
+      latitude: -5.7945,
+      longitude: -35.211,
+      accuracyMeters: 25,
+    });
+
+    const locations = await request(baseUrl, 'GET', '/patients/me/locations', patientToken);
+    if (!Array.isArray(locations.locations) || locations.locations.length === 0) {
+      throw new Error('Expected saved patient location');
+    }
+
+    const alerts = await request(baseUrl, 'GET', '/patients/me/alerts', patientToken);
+    if (!Array.isArray(alerts.alerts)) {
+      throw new Error('Expected patient alerts');
     }
 
     const patientCode = patientLogin.patient.accessCode;

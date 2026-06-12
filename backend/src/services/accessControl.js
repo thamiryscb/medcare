@@ -17,6 +17,8 @@ function publicPatient(patient) {
     userId: patient.userId,
     fullName: patient.fullName,
     accessCode: patient.accessCode,
+    locationSharingEnabled: patient.locationSharingEnabled,
+    compartilhamentoLocalizacao: patient.locationSharingEnabled,
     active: patient.active,
   };
 }

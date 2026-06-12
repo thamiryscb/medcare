@@ -41,14 +41,18 @@ function getChecklistForDate(store, actor, patientId, dateValue) {
           dose: medication.dose,
           uiColor: medication.uiColor,
           cor: medication.uiColor,
+          confirmationLimitMinutes: schedule.confirmationLimitMinutes || 30,
           taken,
           tomado: taken,
+          status: taken ? 'taken' : doseStatus(date, schedule.time, schedule.confirmationLimitMinutes),
           confirmedAt: checkin ? checkin.confirmedAt : null,
           confirmedByUserId: checkin ? checkin.confirmedByUserId : null,
         };
       });
     })
     .sort((left, right) => compareTime(left.time, right.time) || left.name.localeCompare(right.name));
+
+  ensureMissedDoseAlerts(store, patient.id, date, items);
 
   const taken = items.filter((item) => item.taken).length;
   const total = items.length;
@@ -64,6 +68,37 @@ function getChecklistForDate(store, actor, patientId, dateValue) {
     items,
     itens: items,
   };
+}
+
+function doseStatus(date, time, confirmationLimitMinutes = 30) {
+  return isDoseLate(date, time, confirmationLimitMinutes) ? 'missed' : 'pending';
+}
+
+function isDoseLate(date, time, confirmationLimitMinutes = 30) {
+  const scheduledAt = new Date(`${date}T${time}:00`);
+  if (Number.isNaN(scheduledAt.getTime())) return false;
+
+  const limitAt = scheduledAt.getTime() + Number(confirmationLimitMinutes || 30) * 60 * 1000;
+  return limitAt < Date.now();
+}
+
+function ensureMissedDoseAlerts(store, patientId, date, items) {
+  items
+    .filter((item) => !item.taken && item.status === 'missed')
+    .forEach((item) => {
+      const detail = `${date}:${item.medicationId}:${item.scheduleId}`;
+      if (store.findOpenAlertByTypeAndDetail(patientId, 'missed_medication', detail)) return;
+
+      store.createAlert({
+        patientId,
+        type: 'missed_medication',
+        severity: 'warning',
+        title: 'Lembrete nao confirmado',
+        description: `${item.name} - previsto para ${item.time} em ${date}`,
+        detail,
+        status: 'open',
+      });
+    });
 }
 
 function markChecklistItemTaken(store, actor, itemId, payload = {}) {

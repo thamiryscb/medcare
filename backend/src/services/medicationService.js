@@ -55,6 +55,9 @@ function normalizeMedicationPayload(payload, requireName) {
   const dose = payload.dose || payload.novaDose;
   const boxColor = payload.boxColor || payload.corBox;
   const uiColor = payload.uiColor || payload.cor;
+  const instructions = payload.instructions || payload.instrucoes || payload.observacoes;
+  const imageUri = payload.imageUri || payload.image_uri || payload.imagemUri || payload.imagem;
+  const confirmationLimitMinutes = payload.confirmationLimitMinutes || payload.limiteConfirmacaoMinutos;
   const rawTimes = payload.scheduleTimes || payload.horarios || payload.times || payload.horarioPrincipal || payload.novoHorario;
   const scheduleTimes = normalizeTimes(rawTimes);
 
@@ -71,6 +74,9 @@ function normalizeMedicationPayload(payload, requireName) {
     dose,
     boxColor,
     uiColor,
+    instructions,
+    imageUri,
+    confirmationLimitMinutes,
     scheduleTimes,
   };
 }
@@ -106,6 +112,10 @@ function toMedicationResponse(medication, schedules, checkins) {
     corBox: medication.boxColor,
     uiColor: medication.uiColor,
     cor: medication.uiColor,
+    instructions: medication.instructions,
+    instrucoes: medication.instructions,
+    imageUri: medication.imageUri,
+    imagemUri: medication.imageUri,
     scheduleTimes,
     schedules: scheduleTimes,
     horarios: scheduleTimes,

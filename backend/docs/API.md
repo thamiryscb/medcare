@@ -97,6 +97,9 @@ GET /patients/me/medications
   "dose": "1 comprimido",
   "boxColor": "Caixa branca",
   "uiColor": "#e6f0ff",
+  "instructions": "Tomar com agua.",
+  "imageUri": "file:///imagem-losartana.jpg",
+  "confirmationLimitMinutes": 30,
   "scheduleTimes": ["08:00", "20:00"]
 }
 ```
@@ -156,3 +159,32 @@ If the caregiver already exists, the endpoint links the caregiver. Otherwise it 
 `PATCH /alerts/:alertId/read`
 
 Marks an alert as read.
+
+## Location
+
+`PATCH /patients/:patientId/location-sharing`
+
+Use `me` for the current patient:
+
+```json
+{
+  "enabled": true
+}
+```
+
+`POST /patients/:patientId/locations`
+
+Only works when location sharing is enabled for the patient.
+
+```json
+{
+  "latitude": -5.7945,
+  "longitude": -35.211,
+  "accuracyMeters": 25,
+  "capturedAt": "2026-06-12T12:00:00.000Z"
+}
+```
+
+`GET /patients/:patientId/locations?limit=20`
+
+Returns the latest authorized location records for the patient.

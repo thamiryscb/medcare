@@ -68,6 +68,14 @@ export function createMedication(token, patientId = 'me', medication) {
   });
 }
 
+export function updateMedication(token, medicationId, medication) {
+  return apiRequest(`/medications/${encodeURIComponent(medicationId)}`, {
+    method: 'PATCH',
+    token,
+    body: medication,
+  });
+}
+
 export function deleteMedication(token, medicationId) {
   return apiRequest(`/medications/${encodeURIComponent(medicationId)}`, {
     method: 'DELETE',
@@ -84,5 +92,25 @@ export function markChecklistItemTaken(token, itemId, taken = true) {
     method: 'PATCH',
     token,
     body: { taken },
+  });
+}
+
+export function getLocations(token, patientId = 'me', limit = 20) {
+  return apiRequest(`/patients/${patientId}/locations?limit=${encodeURIComponent(limit)}`, { token });
+}
+
+export function saveLocation(token, patientId = 'me', location) {
+  return apiRequest(`/patients/${patientId}/locations`, {
+    method: 'POST',
+    token,
+    body: location,
+  });
+}
+
+export function updateLocationSharing(token, patientId = 'me', enabled) {
+  return apiRequest(`/patients/${patientId}/location-sharing`, {
+    method: 'PATCH',
+    token,
+    body: { enabled },
   });
 }

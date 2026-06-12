@@ -63,6 +63,10 @@ function toCaregiverResponse(user, link) {
     iniciais: user.initials,
     relationship: link.relationship,
     status: link.status,
+    notifyOnMissedDose: link.notifyOnMissedDose,
+    avisaDoseNaoConfirmada: link.notifyOnMissedDose,
+    notifyOnLocation: link.notifyOnLocation,
+    avisaLocalizacao: link.notifyOnLocation,
   };
 }
 

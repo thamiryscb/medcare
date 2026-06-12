@@ -17,6 +17,7 @@ function createSqliteStore(databaseUrl) {
   const db = new DatabaseSync(databasePath);
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8'));
+  migrateExistingDatabase(db);
   seedIfEmpty(db);
 
   function createId(prefix) {
@@ -193,14 +194,16 @@ function createSqliteStore(databaseUrl) {
 
       db.prepare(`
         INSERT INTO caregiver_links
-          (id, patient_id, caregiver_user_id, relationship, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (id, patient_id, caregiver_user_id, relationship, status, notify_on_missed_dose, notify_on_location, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         link.id,
         link.patientId,
         link.caregiverUserId,
         link.relationship,
         link.status,
+        link.notifyOnMissedDose === false ? 0 : 1,
+        link.notifyOnLocation ? 1 : 0,
         link.createdAt,
         link.updatedAt,
       );
@@ -270,6 +273,8 @@ function createSqliteStore(databaseUrl) {
         dose: payload.dose || '1 comprimido',
         boxColor: payload.boxColor || 'Caixa azul',
         uiColor: payload.uiColor || '#e6f0ff',
+        instructions: payload.instructions || null,
+        imageUri: payload.imageUri || null,
         active: true,
         createdAt: now,
         updatedAt: now,
@@ -278,8 +283,8 @@ function createSqliteStore(databaseUrl) {
       transaction(db, () => {
         db.prepare(`
           INSERT INTO medications
-            (id, patient_id, name, dose, box_color, ui_color, active, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, patient_id, name, dose, box_color, ui_color, instructions, image_uri, active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           medication.id,
           medication.patientId,
@@ -287,6 +292,8 @@ function createSqliteStore(databaseUrl) {
           medication.dose,
           medication.boxColor,
           medication.uiColor,
+          medication.instructions,
+          medication.imageUri,
           1,
           medication.createdAt,
           medication.updatedAt,
@@ -295,9 +302,9 @@ function createSqliteStore(databaseUrl) {
         (payload.scheduleTimes || ['08:00']).forEach((time) => {
           db.prepare(`
             INSERT INTO medication_schedules
-              (id, medication_id, time, active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `).run(createId('sched'), medication.id, time, 1, now, now);
+              (id, medication_id, time, confirmation_limit_minutes, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(createId('sched'), medication.id, time, payload.confirmationLimitMinutes || 30, 1, now, now);
         });
       });
 
@@ -314,19 +321,23 @@ function createSqliteStore(databaseUrl) {
         dose: payload.dose || medication.dose,
         boxColor: payload.boxColor || medication.boxColor,
         uiColor: payload.uiColor || medication.uiColor,
+        instructions: payload.instructions !== undefined ? payload.instructions : medication.instructions,
+        imageUri: payload.imageUri !== undefined ? payload.imageUri : medication.imageUri,
         updatedAt: nowIso(),
       };
 
       transaction(db, () => {
         db.prepare(`
           UPDATE medications
-          SET name = ?, dose = ?, box_color = ?, ui_color = ?, updated_at = ?
+          SET name = ?, dose = ?, box_color = ?, ui_color = ?, instructions = ?, image_uri = ?, updated_at = ?
           WHERE id = ?
         `).run(
           updated.name,
           updated.dose,
           updated.boxColor,
           updated.uiColor,
+          updated.instructions,
+          updated.imageUri,
           updated.updatedAt,
           updated.id,
         );
@@ -341,10 +352,10 @@ function createSqliteStore(databaseUrl) {
           payload.scheduleTimes.forEach((time) => {
             const now = nowIso();
             db.prepare(`
-              INSERT INTO medication_schedules
-                (id, medication_id, time, active, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?)
-            `).run(createId('sched'), updated.id, time, 1, now, now);
+            INSERT INTO medication_schedules
+                (id, medication_id, time, confirmation_limit_minutes, active, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(createId('sched'), updated.id, time, payload.confirmationLimitMinutes || 30, 1, now, now);
           });
         }
       });
@@ -455,6 +466,102 @@ function createSqliteStore(databaseUrl) {
       return { ...alert, status: 'read', updatedAt: now };
     },
 
+    createAlert(payload) {
+      const now = nowIso();
+      const alert = {
+        id: createId('alert'),
+        patientId: payload.patientId,
+        type: payload.type,
+        severity: payload.severity || 'warning',
+        title: payload.title,
+        description: payload.description,
+        detail: payload.detail || null,
+        status: payload.status || 'open',
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      db.prepare(`
+        INSERT INTO alerts
+          (id, patient_id, type, severity, title, description, detail, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        alert.id,
+        alert.patientId,
+        alert.type,
+        alert.severity,
+        alert.title,
+        alert.description,
+        alert.detail,
+        alert.status,
+        alert.createdAt,
+        alert.updatedAt,
+      );
+
+      return alert;
+    },
+
+    findOpenAlertByTypeAndDetail(patientId, type, detail) {
+      return mapAlert(db.prepare(`
+        SELECT * FROM alerts
+        WHERE patient_id = ? AND type = ? AND detail = ? AND status = 'open'
+      `).get(patientId, type, detail));
+    },
+
+    setPatientLocationSharing(patientId, enabled) {
+      const patient = store.findPatientById(patientId);
+      if (!patient) return null;
+
+      const now = nowIso();
+      db.prepare(`
+        UPDATE patients
+        SET location_sharing_enabled = ?, updated_at = ?
+        WHERE id = ?
+      `).run(enabled ? 1 : 0, now, patient.id);
+
+      return { ...patient, locationSharingEnabled: Boolean(enabled), updatedAt: now };
+    },
+
+    createLocationEvent(patientId, payload) {
+      const now = nowIso();
+      const event = {
+        id: createId('loc'),
+        patientId,
+        latitude: Number(payload.latitude),
+        longitude: Number(payload.longitude),
+        accuracyMeters: payload.accuracyMeters ?? payload.accuracy_meters ?? null,
+        capturedAt: payload.capturedAt || payload.captured_at || now,
+        sentToCaregiver: false,
+        createdAt: now,
+      };
+
+      db.prepare(`
+        INSERT INTO location_events
+          (id, patient_id, latitude, longitude, accuracy_meters, captured_at, sent_to_caregiver, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.id,
+        event.patientId,
+        event.latitude,
+        event.longitude,
+        event.accuracyMeters,
+        event.capturedAt,
+        event.sentToCaregiver ? 1 : 0,
+        event.createdAt,
+      );
+
+      return event;
+    },
+
+    listLocationEvents(patientId, limit = 20) {
+      return db.prepare(`
+        SELECT * FROM location_events
+        WHERE patient_id = ?
+        ORDER BY captured_at DESC
+        LIMIT ?
+      `).all(patientId, limit).map(mapLocationEvent);
+    },
+
     createSession(userId, ttlHours) {
       const now = Date.now();
       const expiresAt = new Date(now + ttlHours * 60 * 60 * 1000).toISOString();
@@ -538,13 +645,14 @@ function seedIfEmpty(db) {
 
     seed.patients.forEach((patient) => {
       db.prepare(`
-        INSERT INTO patients (id, user_id, full_name, access_code, active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO patients (id, user_id, full_name, access_code, location_sharing_enabled, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         patient.id,
         patient.userId,
         patient.fullName,
         patient.accessCode,
+        patient.locationSharingEnabled ? 1 : 0,
         patient.active ? 1 : 0,
         patient.createdAt,
         patient.updatedAt,
@@ -554,14 +662,16 @@ function seedIfEmpty(db) {
     seed.caregiverLinks.forEach((link) => {
       db.prepare(`
         INSERT INTO caregiver_links
-          (id, patient_id, caregiver_user_id, relationship, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (id, patient_id, caregiver_user_id, relationship, status, notify_on_missed_dose, notify_on_location, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         link.id,
         link.patientId,
         link.caregiverUserId,
         link.relationship,
         link.status,
+        link.notifyOnMissedDose === false ? 0 : 1,
+        link.notifyOnLocation ? 1 : 0,
         link.createdAt,
         link.updatedAt,
       );
@@ -588,8 +698,8 @@ function seedIfEmpty(db) {
     seed.medications.forEach((medication) => {
       db.prepare(`
         INSERT INTO medications
-          (id, patient_id, name, dose, box_color, ui_color, active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, patient_id, name, dose, box_color, ui_color, instructions, image_uri, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         medication.id,
         medication.patientId,
@@ -597,6 +707,8 @@ function seedIfEmpty(db) {
         medication.dose,
         medication.boxColor,
         medication.uiColor,
+        medication.instructions || null,
+        medication.imageUri || null,
         medication.active ? 1 : 0,
         medication.createdAt,
         medication.updatedAt,
@@ -606,12 +718,13 @@ function seedIfEmpty(db) {
     seed.medicationSchedules.forEach((schedule) => {
       db.prepare(`
         INSERT INTO medication_schedules
-          (id, medication_id, time, active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+          (id, medication_id, time, confirmation_limit_minutes, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         schedule.id,
         schedule.medicationId,
         schedule.time,
+        schedule.confirmationLimitMinutes || 30,
         schedule.active ? 1 : 0,
         schedule.createdAt,
         schedule.updatedAt,
@@ -671,6 +784,21 @@ function transaction(db, fn) {
   }
 }
 
+function migrateExistingDatabase(db) {
+  ensureColumn(db, 'patients', 'location_sharing_enabled', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'caregiver_links', 'notify_on_missed_dose', 'INTEGER NOT NULL DEFAULT 1');
+  ensureColumn(db, 'caregiver_links', 'notify_on_location', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'medications', 'instructions', 'TEXT');
+  ensureColumn(db, 'medications', 'image_uri', 'TEXT');
+  ensureColumn(db, 'medication_schedules', 'confirmation_limit_minutes', 'INTEGER NOT NULL DEFAULT 30');
+}
+
+function ensureColumn(db, table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (columns.some((item) => item.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
+}
+
 function mapUser(row) {
   if (!row) return null;
   return {
@@ -693,6 +821,7 @@ function mapPatient(row) {
     userId: row.user_id,
     fullName: row.full_name,
     accessCode: row.access_code,
+    locationSharingEnabled: Boolean(row.location_sharing_enabled),
     active: Boolean(row.active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -707,6 +836,8 @@ function mapCaregiverLink(row) {
     caregiverUserId: row.caregiver_user_id,
     relationship: row.relationship,
     status: row.status,
+    notifyOnMissedDose: row.notify_on_missed_dose !== 0,
+    notifyOnLocation: Boolean(row.notify_on_location),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -721,6 +852,8 @@ function mapMedication(row) {
     dose: row.dose,
     boxColor: row.box_color,
     uiColor: row.ui_color,
+    instructions: row.instructions,
+    imageUri: row.image_uri,
     active: Boolean(row.active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -733,6 +866,7 @@ function mapMedicationSchedule(row) {
     id: row.id,
     medicationId: row.medication_id,
     time: row.time,
+    confirmationLimitMinutes: row.confirmation_limit_minutes,
     active: Boolean(row.active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -777,6 +911,20 @@ function mapSession(row) {
     token: row.token,
     userId: row.user_id,
     expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
+
+function mapLocationEvent(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    accuracyMeters: row.accuracy_meters,
+    capturedAt: row.captured_at,
+    sentToCaregiver: Boolean(row.sent_to_caregiver),
     createdAt: row.created_at,
   };
 }

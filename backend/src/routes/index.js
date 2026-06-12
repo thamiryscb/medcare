@@ -15,6 +15,11 @@ const {
 const { getChecklistForDate, markChecklistItemTaken } = require('../services/checklistService');
 const { createFamilyInvite, listFamily } = require('../services/familyService');
 const { listAlerts, markAlertRead } = require('../services/alertService');
+const {
+  createLocationEvent,
+  listLocationEvents,
+  updateLocationSharing,
+} = require('../services/locationService');
 
 function registerRoutes(router) {
   router.get('/api/health', () => ({
@@ -78,6 +83,18 @@ function registerRoutes(router) {
 
   router.patch('/api/alerts/:alertId/read', (ctx) => (
     markAlertRead(ctx.store, ctx.actor, ctx.params.alertId)
+  ), { auth: true });
+
+  router.get('/api/patients/:patientId/locations', (ctx) => (
+    listLocationEvents(ctx.store, ctx.actor, ctx.params.patientId, ctx.query)
+  ), { auth: true });
+
+  router.post('/api/patients/:patientId/locations', (ctx) => (
+    { status: 201, body: createLocationEvent(ctx.store, ctx.actor, ctx.params.patientId, ctx.body) }
+  ), { auth: true });
+
+  router.patch('/api/patients/:patientId/location-sharing', (ctx) => (
+    updateLocationSharing(ctx.store, ctx.actor, ctx.params.patientId, ctx.body)
   ), { auth: true });
 }
 
