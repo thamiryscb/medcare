@@ -35,8 +35,26 @@ async function sincronizarChecklistDoDia(pacienteId, data) {
 
   if (error) throw error;
 
+  const remediosAtivosIds = new Set((remedios || []).map((remedio) => remedio.id));
+  const itensDeRemediosRemovidos = itensAtuais.filter(
+    (item) => item.remedio_id && !remediosAtivosIds.has(item.remedio_id)
+  );
+
+  if (itensDeRemediosRemovidos.length > 0) {
+    const idsParaRemover = itensDeRemediosRemovidos.map((item) => item.id);
+    const { error: deleteError } = await supabaseAdmin
+      .from('checklist')
+      .delete()
+      .eq('paciente_id', pacienteId)
+      .in('id', idsParaRemover);
+
+    if (deleteError) throw deleteError;
+  }
+
   const chavesAtuais = new Set(
-    itensAtuais.map((item) => `${item.remedio_id}-${item.horario}`)
+    itensAtuais
+      .filter((item) => !item.remedio_id || remediosAtivosIds.has(item.remedio_id))
+      .map((item) => `${item.remedio_id}-${item.horario}`)
   );
 
   const novosItens = [];

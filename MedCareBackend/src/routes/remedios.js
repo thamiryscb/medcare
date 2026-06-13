@@ -96,11 +96,31 @@ router.put('/:id', autenticar, async (req, res) => {
 router.delete('/:id', autenticar, async (req, res) => {
   try {
     const pacienteId = await getPacienteId(req.usuario.id);
+    const remedioId = req.params.id;
+
+    const { data: remedio, error: buscaError } = await supabaseAdmin
+      .from('remedios')
+      .select('id')
+      .eq('id', remedioId)
+      .eq('paciente_id', pacienteId)
+      .single();
+
+    if (buscaError || !remedio) {
+      return res.status(404).json({ erro: 'Remedio nao encontrado.' });
+    }
+
+    const { error: checklistError } = await supabaseAdmin
+      .from('checklist')
+      .delete()
+      .eq('remedio_id', remedioId)
+      .eq('paciente_id', pacienteId);
+
+    if (checklistError) return res.status(500).json({ erro: checklistError.message });
 
     const { error } = await supabaseAdmin
       .from('remedios')
       .delete()
-      .eq('id', req.params.id)
+      .eq('id', remedioId)
       .eq('paciente_id', pacienteId);
 
     if (error) return res.status(500).json({ erro: error.message });

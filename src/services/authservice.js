@@ -10,9 +10,21 @@ async function requestAuth(path, body) {
     body: JSON.stringify(body),
   });
 
-  const data = await response.json();
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      const preview = text.replace(/\s+/g, ' ').slice(0, 80);
+      throw new Error(`A API respondeu em formato inesperado (${response.status}). Reinicie a API e tente novamente. ${preview}`);
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(data.erro || 'Nao foi possivel concluir agora.');
+    const detalhe = data?.detalhe ? ` ${data.detalhe}` : '';
+    throw new Error(`${data?.erro || 'Nao foi possivel concluir agora.'}${detalhe}`);
   }
 
   return data;

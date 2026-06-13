@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 const express = require('express');
 const cors = require('cors');
 
@@ -26,6 +26,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/remedios', autenticar, remediosRoutes);
 app.use('/api/checklist', autenticar, checklistRoutes);
 app.use('/api/familiares', autenticar, familiaresRoutes);
+
+app.use((req, res, next) => {
+  res.status(404).json({ erro: `Rota nao encontrada: ${req.method} ${req.originalUrl}` });
+});
 
 // Tratamento de erros
 app.use((err, req, res, next) => {

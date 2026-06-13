@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNav from '../components/BottomNav';
 import { adicionarRemedio, listarRemedios, removerRemedio } from '../services/Remedioservice';
+import { reagendarLembretesDosRemedios } from '../services/Lembreteservice';
 
 function corRemedio(corCaixa) {
   const texto = String(corCaixa || '').toLowerCase();
@@ -48,6 +49,7 @@ export default function RemediosScreen({ navigation }) {
     try {
       const data = await listarRemedios();
       setRemedios(data || []);
+      reagendarLembretesDosRemedios(data || []).catch(() => {});
     } catch (error) {
       Alert.alert('Erro', error.message);
     } finally {

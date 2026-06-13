@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNavFamiliar from '../components/BottomNavFamiliar';
 import { adicionarRemedio, listarRemedios, removerRemedio } from '../services/Remedioservice';
+import { reagendarLembretesDosRemedios } from '../services/Lembreteservice';
 
 function parseHorarios(valor) {
   return valor.split(',').map((item) => item.trim()).filter(Boolean);
@@ -34,7 +35,9 @@ export default function RemediosFamiliarScreen({ navigation }) {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      setRemedios((await listarRemedios()) || []);
+      const data = (await listarRemedios()) || [];
+      setRemedios(data);
+      reagendarLembretesDosRemedios(data).catch(() => {});
     } catch (error) {
       Alert.alert('Erro', error.message);
     } finally {

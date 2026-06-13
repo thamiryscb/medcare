@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../supabase');
+const { supabasePublic } = require('../supabase');
 
 async function autenticar(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -10,7 +10,7 @@ async function autenticar(req, res, next) {
   const token = authHeader.split('Bearer ')[1];
 
   try {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    const { data, error } = await supabasePublic.auth.getUser(token);
 
     if (error || !data.user) {
       return res.status(401).json({ erro: 'Token inválido ou expirado.' });

@@ -1,14 +1,58 @@
 const express = require('express');
 const router = express.Router();
-const { supabaseAdmin } = require('../supabase');
+const { supabaseAdmin, supabasePublic } = require('../supabase');
 const { autenticar } = require('../middleware/auth');
 
-// Cadastro de novo usuário
+async function buscarAuthPorEmail(email) {
+  let page = 1;
+  const perPage = 1000;
+
+  while (page <= 10) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+
+    const usuario = data.users.find((user) => user.email?.toLowerCase() === email);
+    if (usuario) return usuario;
+    if (data.users.length < perPage) return null;
+    page += 1;
+  }
+
+  return null;
+}
+
+async function gerarCodigoPaciente(nome) {
+  const base = String(nome || 'PACIENTE')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 10)
+    .toUpperCase() || 'PACIENTE';
+
+  for (let tentativa = 0; tentativa < 10; tentativa += 1) {
+    const sufixo = Math.floor(1000 + Math.random() * 9000);
+    const codigo = `${base}-${sufixo}`;
+    const { data } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('codigo_paciente', codigo)
+      .maybeSingle();
+
+    if (!data) return codigo;
+  }
+
+  return `${base}-${Date.now().toString().slice(-6)}`;
+}
+
 router.post('/cadastro', async (req, res) => {
-  const { email, senha, nome, tipo, codigoPaciente } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const { senha, nome, tipo, codigoPaciente } = req.body;
 
   if (!email || !senha || !nome || !tipo) {
-    return res.status(400).json({ erro: 'Preencha todos os campos obrigatórios.' });
+    return res.status(400).json({ erro: 'Preencha todos os campos obrigatorios.' });
+  }
+
+  if (String(senha).length < 6) {
+    return res.status(400).json({ erro: 'A senha precisa ter pelo menos 6 caracteres.' });
   }
 
   if (!['paciente', 'familiar'].includes(tipo)) {
@@ -16,48 +60,71 @@ router.post('/cadastro', async (req, res) => {
   }
 
   try {
-    // Verifica código do paciente se for familiar
+    const { data: perfilExistente } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (perfilExistente) {
+      return res.status(409).json({ erro: 'Este e-mail ja esta cadastrado. Entre com e-mail e senha.' });
+    }
+
     let pacienteVinculadoId = null;
     if (tipo === 'familiar') {
       if (!codigoPaciente) {
-        return res.status(400).json({ erro: 'Código do paciente é obrigatório para familiar.' });
+        return res.status(400).json({ erro: 'Codigo do paciente e obrigatorio para familiar.' });
       }
+
       const { data: paciente } = await supabaseAdmin
         .from('usuarios')
         .select('id')
-        .eq('codigo_paciente', codigoPaciente)
+        .eq('codigo_paciente', String(codigoPaciente).trim().toUpperCase())
         .single();
 
       if (!paciente) {
-        return res.status(404).json({ erro: 'Código do paciente não encontrado.' });
+        return res.status(404).json({ erro: 'Codigo do paciente nao encontrado.' });
       }
+
       pacienteVinculadoId = paciente.id;
     }
 
-    // Cria usuário no Supabase Auth
+    let authUser = null;
+    let usuarioCriadoAgora = false;
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
       email_confirm: true,
+      user_metadata: { nome, tipo },
     });
 
     if (authError) {
-      if (authError.message.includes('already registered')) {
-        return res.status(400).json({ erro: 'Este e-mail já está cadastrado.' });
+      const mensagem = String(authError.message || '').toLowerCase();
+      if (mensagem.includes('already') || mensagem.includes('registered') || mensagem.includes('exists')) {
+        authUser = await buscarAuthPorEmail(email);
+        if (!authUser) {
+          return res.status(409).json({ erro: 'Este e-mail ja existe no login. Use outro e-mail.' });
+        }
+
+        await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+          password: senha,
+          user_metadata: { nome, tipo },
+        });
+      } else {
+        return res.status(400).json({ erro: authError.message });
       }
-      return res.status(400).json({ erro: authError.message });
+    } else {
+      authUser = authData.user;
+      usuarioCriadoAgora = true;
     }
 
-    // Gera código único para paciente
-    const codigo = tipo === 'paciente'
-      ? `${nome.split(' ')[0].toUpperCase()}-${Date.now().toString().slice(-4)}`
-      : null;
+    const codigo = tipo === 'paciente' ? await gerarCodigoPaciente(nome) : null;
 
-    // Salva perfil na tabela usuarios
     const { error: dbError } = await supabaseAdmin
       .from('usuarios')
       .insert({
-        id: authData.user.id,
+        id: authUser.id,
         nome,
         email,
         tipo,
@@ -66,12 +133,16 @@ router.post('/cadastro', async (req, res) => {
       });
 
     if (dbError) {
+      if (usuarioCriadoAgora) {
+        await supabaseAdmin.auth.admin.deleteUser(authUser.id).catch(() => {});
+      }
+
       return res.status(500).json({ erro: 'Erro ao salvar perfil.', detalhe: dbError.message });
     }
 
     return res.status(201).json({
-      mensagem: 'Conta criada com sucesso!',
-      uid: authData.user.id,
+      mensagem: 'Conta criada com sucesso.',
+      uid: authUser.id,
       codigoPaciente: codigo,
     });
   } catch (error) {
@@ -79,27 +150,32 @@ router.post('/cadastro', async (req, res) => {
   }
 });
 
-// Login
 router.post('/login', async (req, res) => {
-  const { email, senha } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const { senha } = req.body;
 
   if (!email || !senha) {
-    return res.status(400).json({ erro: 'E-mail e senha são obrigatórios.' });
+    return res.status(400).json({ erro: 'E-mail e senha sao obrigatorios.' });
   }
 
   try {
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password: senha });
+    const { data, error } = await supabasePublic.auth.signInWithPassword({ email, password: senha });
 
     if (error) {
       return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
     }
 
-    // Busca perfil completo
-    const { data: perfil } = await supabaseAdmin
+    const { data: perfil, error: perfilError } = await supabaseAdmin
       .from('usuarios')
       .select('*')
       .eq('id', data.user.id)
       .single();
+
+    if (perfilError || !perfil) {
+      return res.status(404).json({
+        erro: 'Conta existe no login, mas o perfil nao foi encontrado. Cadastre novamente ou fale com o suporte.',
+      });
+    }
 
     return res.json({
       token: data.session.access_token,
@@ -110,7 +186,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Buscar perfil do usuário logado
 router.get('/perfil', autenticar, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -120,7 +195,7 @@ router.get('/perfil', autenticar, async (req, res) => {
       .single();
 
     if (error || !data) {
-      return res.status(404).json({ erro: 'Perfil não encontrado.' });
+      return res.status(404).json({ erro: 'Perfil nao encontrado.' });
     }
 
     return res.json(data);

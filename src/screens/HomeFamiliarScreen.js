@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNavFamiliar from '../components/BottomNavFamiliar';
 import { getChecklist, getHoje } from '../services/Checklistservice';
-import { getUsuario, logout } from '../services/authservice';
+import { getUsuario } from '../services/authservice';
+import { listarRemedios } from '../services/Remedioservice';
+import { reagendarLembretesDosRemedios } from '../services/Lembreteservice';
 
 export default function HomeFamiliarScreen({ navigation }) {
   const [usuario, setUsuario] = useState(null);
@@ -29,11 +31,15 @@ export default function HomeFamiliarScreen({ navigation }) {
         setCarregando(true);
         try {
           const usuarioLogado = await getUsuario();
-          const checklist = await getChecklist(getHoje());
+          const [checklist, remedios] = await Promise.all([
+            getChecklist(getHoje()),
+            listarRemedios().catch(() => []),
+          ]);
           if (ativo) {
             setUsuario(usuarioLogado);
             setItens(checklist.itens || []);
           }
+          reagendarLembretesDosRemedios(remedios || []).catch(() => {});
         } catch (error) {
           if (ativo) Alert.alert('Aviso', error.message);
         } finally {
@@ -48,11 +54,6 @@ export default function HomeFamiliarScreen({ navigation }) {
     }, [])
   );
 
-  async function sair() {
-    await logout();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-  }
-
   const tomados = itens.filter((item) => item.tomado).length;
   const total = itens.length;
   const pendentes = Math.max(total - tomados, 0);
@@ -64,8 +65,8 @@ export default function HomeFamiliarScreen({ navigation }) {
           <Text style={styles.headerLabel}>Voce esta acompanhando</Text>
           <Text style={styles.headerName}>{usuario?.nome || 'Familiar'}</Text>
         </View>
-        <TouchableOpacity style={styles.sairBtn} onPress={sair}>
-          <Ionicons name="log-out-outline" size={24} color={COLORS.white} />
+        <TouchableOpacity style={styles.sairBtn} onPress={() => navigation.navigate('Perfil')}>
+          <Ionicons name="person-circle-outline" size={28} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 

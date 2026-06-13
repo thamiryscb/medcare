@@ -23,11 +23,12 @@ function dataBonita() {
   }).format(new Date());
 }
 
-export default function ChecklistScreen({ navigation }) {
+export default function ChecklistScreen({ navigation, route }) {
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [marcandoId, setMarcandoId] = useState(null);
   const hoje = getHoje();
+  const lembrete = route.params?.lembrete;
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -62,10 +63,11 @@ export default function ChecklistScreen({ navigation }) {
   const tomados = itens.filter((item) => item.tomado).length;
   const total = itens.length;
   const progresso = total ? Math.round((tomados / total) * 100) : 0;
+  const corDestaque = lembrete ? COLORS.orange : COLORS.primary;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
+      <View style={[styles.header, lembrete && styles.headerAlarme]}>
         <TouchableOpacity onPress={() => navigation.navigate('Home')}>
           <Ionicons name="arrow-back" size={28} color={COLORS.white} />
         </TouchableOpacity>
@@ -80,8 +82,19 @@ export default function ChecklistScreen({ navigation }) {
           <>
             <Text style={styles.dateText}>{dataBonita()}</Text>
             <Text style={styles.sectionTitle}>Progresso do dia</Text>
+            {lembrete && (
+              <View style={styles.alarmBanner}>
+                <Ionicons name="alarm" size={34} color={COLORS.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.alarmTitle}>Hora do remedio</Text>
+                  <Text style={styles.alarmText}>{lembrete.nome}</Text>
+                  <Text style={styles.alarmSub}>{lembrete.dose} - {lembrete.corCaixa} - {lembrete.horario}</Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progresso}%` }]} />
+              <View style={[styles.progressFill, { width: `${progresso}%`, backgroundColor: corDestaque }]} />
             </View>
             <Text style={styles.progressLabel}>{tomados} de {total} tomados</Text>
 
@@ -92,10 +105,16 @@ export default function ChecklistScreen({ navigation }) {
                 <Text style={styles.emptyText}>Cadastre remedios para montar a agenda.</Text>
               </View>
             ) : (
-              itens.map((item) => (
-                <View key={item.id} style={[styles.card, item.tomado && styles.cardDone]}>
-                  <View style={[styles.itemIcon, { backgroundColor: item.tomado ? COLORS.successLight : COLORS.primaryLight }]}>
-                    <Ionicons name="medkit" size={24} color={item.tomado ? COLORS.success : COLORS.primary} />
+              itens.map((item) => {
+                const destacado = lembrete && (
+                  item.remedio_id === lembrete.remedioId ||
+                  (item.nome_remedio === lembrete.nome && item.horario === lembrete.horario)
+                );
+
+                return (
+                <View key={item.id} style={[styles.card, item.tomado && styles.cardDone, destacado && styles.cardAlarm]}>
+                  <View style={[styles.itemIcon, { backgroundColor: item.tomado ? COLORS.successLight : destacado ? '#fff3e0' : COLORS.primaryLight }]}>
+                    <Ionicons name={destacado ? 'alarm' : 'medkit'} size={24} color={item.tomado ? COLORS.success : destacado ? COLORS.warning : COLORS.primary} />
                   </View>
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemNome}>{item.nome_remedio}</Text>
@@ -112,7 +131,8 @@ export default function ChecklistScreen({ navigation }) {
                     </TouchableOpacity>
                   )}
                 </View>
-              ))
+                );
+              })
             )}
 
             {total > 0 && tomados === total && (
@@ -139,6 +159,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerAlarme: { backgroundColor: COLORS.orange },
   headerTitle: { fontSize: 21, fontWeight: '800', color: COLORS.white },
   body: { flex: 1, padding: 16 },
   dateText: { fontSize: 16, color: COLORS.textMuted, textAlign: 'center', marginBottom: 16 },
@@ -155,6 +176,7 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 10,
   },
+  cardAlarm: { borderWidth: 3, borderColor: COLORS.orange, backgroundColor: '#fffaf0' },
   cardDone: { opacity: 0.72 },
   itemIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   itemInfo: { flex: 1 },
@@ -169,4 +191,18 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', padding: 28, backgroundColor: COLORS.white, borderRadius: 16 },
   emptyTitle: { color: COLORS.text, fontSize: 20, fontWeight: '800', marginTop: 10 },
   emptyText: { color: COLORS.textMuted, fontSize: 15, textAlign: 'center', marginTop: 4 },
+  alarmBanner: {
+    backgroundColor: '#fff3e0',
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: COLORS.orange,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 18,
+  },
+  alarmTitle: { color: COLORS.warning, fontSize: 22, fontWeight: '900' },
+  alarmText: { color: COLORS.text, fontSize: 20, fontWeight: '900', marginTop: 2 },
+  alarmSub: { color: COLORS.textMuted, fontSize: 16, marginTop: 2 },
 });

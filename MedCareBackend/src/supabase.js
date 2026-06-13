@@ -8,14 +8,41 @@ for (const key of requiredEnv) {
   }
 }
 
+function getJwtRole(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split('.')[1] || '', 'base64url').toString());
+    return payload.role;
+  } catch (error) {
+    return null;
+  }
+}
+
+if (getJwtRole(process.env.SUPABASE_SERVICE_KEY) !== 'service_role') {
+  throw new Error('SUPABASE_SERVICE_KEY precisa ser a chave service_role do Supabase, nao a anon key.');
+}
+
+if (getJwtRole(process.env.SUPABASE_ANON_KEY) !== 'anon') {
+  throw new Error('SUPABASE_ANON_KEY precisa ser a chave anon do Supabase.');
+}
+
+const supabaseOptions = {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+};
+
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
+  process.env.SUPABASE_SERVICE_KEY,
+  supabaseOptions
 );
 
 const supabasePublic = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_ANON_KEY,
+  supabaseOptions
 );
 
 module.exports = { supabaseAdmin, supabasePublic };

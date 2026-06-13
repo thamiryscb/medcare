@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 import BottomNav from '../components/BottomNav';
 import { getChecklist, getHoje } from '../services/Checklistservice';
-import { getUsuario, logout } from '../services/authservice';
+import { getUsuario } from '../services/authservice';
+import { listarRemedios } from '../services/Remedioservice';
+import { reagendarLembretesDosRemedios } from '../services/Lembreteservice';
 
 export default function HomeScreen({ navigation }) {
   const [usuario, setUsuario] = useState(null);
@@ -29,11 +31,15 @@ export default function HomeScreen({ navigation }) {
         setCarregando(true);
         try {
           const usuarioLogado = await getUsuario();
-          const checklist = await getChecklist(getHoje());
+          const [checklist, remedios] = await Promise.all([
+            getChecklist(getHoje()),
+            listarRemedios().catch(() => []),
+          ]);
           if (ativo) {
             setUsuario(usuarioLogado);
             setItens(checklist.itens || []);
           }
+          reagendarLembretesDosRemedios(remedios || []).catch(() => {});
         } catch (error) {
           if (ativo) Alert.alert('Aviso', error.message);
         } finally {
@@ -47,11 +53,6 @@ export default function HomeScreen({ navigation }) {
       };
     }, [])
   );
-
-  async function sair() {
-    await logout();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-  }
 
   const tomados = itens.filter((item) => item.tomado).length;
   const total = itens.length;
@@ -70,7 +71,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.greeting}>Ola,</Text>
           <Text style={styles.name}>{usuario?.nome || 'Paciente'}</Text>
         </View>
-        <TouchableOpacity style={styles.avatar} onPress={sair}>
+        <TouchableOpacity style={styles.avatar} onPress={() => navigation.navigate('Perfil')}>
           <Text style={styles.avatarText}>{iniciais}</Text>
         </TouchableOpacity>
       </View>

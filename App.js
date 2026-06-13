@@ -1,10 +1,11 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import LoginScreen from './src/screens/LoginScreen';
 import LoginFamiliarScreen from './src/screens/LoginFamiliarScreen';
 import CadastroScreen from './src/screens/CadastroScreen';
+import PerfilScreen from './src/screens/PerfilScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import RemediosScreen from './src/screens/RemediosScreen';
 import ChecklistScreen from './src/screens/ChecklistScreen';
@@ -12,18 +13,36 @@ import FamiliaScreen from './src/screens/FamiliaScreen';
 import HomeFamiliarScreen from './src/screens/HomeFamiliarScreen';
 import RemediosFamiliarScreen from './src/screens/RemediosFamiliarScreen';
 import ChecklistFamiliarScreen from './src/screens/ChecklistFamiliarScreen';
+import {
+  abrirUltimaNotificacaoSeExistir,
+  observarToqueEmNotificacao,
+  prepararNotificacoes,
+} from './src/services/Lembreteservice';
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 export default function App() {
+  useEffect(() => {
+    prepararNotificacoes().catch(() => {});
+    const subscription = observarToqueEmNotificacao(navigationRef);
+    return () => subscription.remove();
+  }, []);
+
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        abrirUltimaNotificacaoSeExistir(navigationRef).catch(() => {});
+      }}
+    >
       <Stack.Navigator
         initialRouteName="Login"
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Cadastro" component={CadastroScreen} />
+        <Stack.Screen name="Perfil" component={PerfilScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Remedios" component={RemediosScreen} />
         <Stack.Screen name="Checklist" component={ChecklistScreen} />
